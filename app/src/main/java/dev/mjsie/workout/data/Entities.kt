@@ -1,5 +1,6 @@
 package dev.mjsie.workout.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -64,6 +65,8 @@ data class LogEntry(
     /** The session's date. */
     val epochDay: Long,
     val weight: Double,
+    /** How it went; see [dev.mjsie.workout.Outcome]. 0 = completed. */
+    @ColumnInfo(defaultValue = "0") val outcome: Int = 0,
 )
 
 /** Morning body weight for one day. */

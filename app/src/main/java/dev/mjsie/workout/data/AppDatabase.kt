@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Workout::class, Exercise::class, WorkoutExercise::class, LogEntry::class, BodyWeight::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -22,7 +22,7 @@ abstract class AppDatabase : RoomDatabase() {
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "workouts.db")
                     .addCallback(SeedData)
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }
@@ -67,6 +67,13 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("DROP TABLE `log_entries`")
         db.execSQL("ALTER TABLE `log_entries_new` RENAME TO `log_entries`")
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_log_entries_exerciseId` ON `log_entries` (`exerciseId`)")
+    }
+}
+
+/** v4 records each session's outcome (completed / missed / 10+ AMRAP); existing entries count as completed. */
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `log_entries` ADD COLUMN `outcome` INTEGER NOT NULL DEFAULT 0")
     }
 }
 

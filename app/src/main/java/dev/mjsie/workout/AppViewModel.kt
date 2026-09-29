@@ -150,8 +150,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun logWeight(workoutId: Long, exerciseId: Long, epochDay: Long, weight: Double) {
-        viewModelScope.launch { dao.upsertLog(LogEntry(workoutId, exerciseId, epochDay, weight)) }
+    fun logWeight(workoutId: Long, exerciseId: Long, epochDay: Long, weight: Double, outcome: Outcome = Outcome.DONE) {
+        viewModelScope.launch { dao.upsertLog(LogEntry(workoutId, exerciseId, epochDay, weight, outcome.code)) }
     }
 
     fun deleteLog(entry: LogEntry) {

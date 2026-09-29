@@ -24,7 +24,7 @@ data class Snapshot(
 /** Human-readable JSON backup format. */
 object Backup {
     private const val FORMAT = "workout-tracker-backup"
-    private const val VERSION = 1
+    private const val VERSION = 2 // v2 adds log outcome (missed / 10+ AMRAP)
 
     fun toJson(s: Snapshot): String = JSONObject()
         .put("format", FORMAT)
@@ -44,7 +44,7 @@ object Backup {
         })
         .put("logs", array(s.logs) {
             JSONObject().put("workoutId", it.workoutId).put("exerciseId", it.exerciseId)
-                .put("epochDay", it.epochDay).put("weight", it.weight)
+                .put("epochDay", it.epochDay).put("weight", it.weight).put("outcome", it.outcome)
         })
         .put("bodyWeights", array(s.bodyWeights) { JSONObject().put("epochDay", it.epochDay).put("weight", it.weight) })
         .toString(2)
@@ -71,7 +71,8 @@ object Backup {
                 WorkoutExercise(it.getLong("workoutId"), it.getLong("exerciseId"), it.getInt("position"))
             },
             logs = list(root, "logs") {
-                LogEntry(it.getLong("workoutId"), it.getLong("exerciseId"), it.getLong("epochDay"), it.getDouble("weight"))
+                LogEntry(it.getLong("workoutId"), it.getLong("exerciseId"), it.getLong("epochDay"), it.getDouble("weight"),
+                    it.optInt("outcome", 0))
             },
             bodyWeights = list(root, "bodyWeights") { BodyWeight(it.getLong("epochDay"), it.getDouble("weight")) },
             unit = settings.getString("unit"),

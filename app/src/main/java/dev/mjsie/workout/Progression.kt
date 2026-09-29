@@ -19,16 +19,45 @@ data class ExerciseProgress(
     /** This session's entry, if already logged. */
     val logged: LogEntry?,
 ) {
-    /** What you SHOULD lift: last session's weight + increment, or the starting weight. */
+    /** What you SHOULD lift: based on last session's weight and outcome, or the starting weight. */
     val target: Double
-        get() = previous?.let { it.weight + exercise.increment } ?: exercise.startingWeight
+        get() = previous?.let { Progression.nextTarget(it, exercise) } ?: exercise.startingWeight
 
     /** Preview for the next session of this workout, once this one is logged. */
     val nextTime: Double?
-        get() = logged?.let { it.weight + exercise.increment }
+        get() = logged?.let { Progression.nextTarget(it, exercise) }
 }
 
+/** How a logged session went. Stored in [LogEntry.outcome] as [code]. */
+enum class Outcome(val code: Int) {
+    /** Completed all reps: add the usual increment. */
+    DONE(0),
+    /** Didn't complete the exercise: deload by 10%. */
+    MISSED(1),
+    /** 10+ reps on the last AMRAP set: add double the increment. */
+    AMRAP_10(2);
+
+    companion object {
+        fun of(code: Int): Outcome = entries.firstOrNull { it.code == code } ?: DONE
+    }
+}
+
+val LogEntry.result: Outcome get() = Outcome.of(outcome)
+
 object Progression {
+    const val DELOAD_FRACTION = 0.10
+    const val PLATE_STEP = 2.5
+
+    /** Next session's target after [entry]. */
+    fun nextTarget(entry: LogEntry, exercise: Exercise): Double = when (entry.result) {
+        Outcome.DONE -> entry.weight + exercise.increment
+        Outcome.AMRAP_10 -> entry.weight + 2 * exercise.increment
+        Outcome.MISSED -> maxOf(0.0, entry.weight - roundToStep(entry.weight * DELOAD_FRACTION))
+    }
+
+    /** Nearest multiple of 2.5 (halves round up): 13.5 -> 12.5, 9.5 -> 10. */
+    fun roundToStep(value: Double, step: Double = PLATE_STEP): Double = Math.round(value / step) * step
+
     /** Weeks start on Monday; returns that Monday as an epoch day. */
     fun weekStart(date: LocalDate): Long =
         date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toEpochDay()

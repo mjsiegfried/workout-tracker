@@ -12,7 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.mjsie.workout.AppViewModel
+import dev.mjsie.workout.Outcome
 import dev.mjsie.workout.Progression
+import dev.mjsie.workout.result
 import dev.mjsie.workout.Schedule
 import dev.mjsie.workout.Weekly
 import dev.mjsie.workout.data.BodyWeight
@@ -112,6 +114,9 @@ private fun WeekCard(
                         Text(exercise.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         when {
                             logged == null -> Text("—", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            logged.result == Outcome.MISSED ->
+                                Text("${formatWeight(logged.weight)} $unit ✗ missed", color = MaterialTheme.colorScheme.error)
+                            logged.result == Outcome.AMRAP_10 -> Text("${formatWeight(logged.weight)} $unit ✓ 10+")
                             logged.weight >= progress.target -> Text("${formatWeight(logged.weight)} $unit ✓")
                             else -> Text("${formatWeight(logged.weight)} $unit ↓", color = MaterialTheme.colorScheme.error)
                         }

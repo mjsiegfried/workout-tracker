@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.mjsie.workout.AppViewModel
 import dev.mjsie.workout.ExerciseProgress
+import dev.mjsie.workout.Outcome
+import dev.mjsie.workout.result
 import dev.mjsie.workout.Progression
 import dev.mjsie.workout.data.Exercise
 import dev.mjsie.workout.data.Workout
@@ -126,7 +128,7 @@ fun HomeScreen(vm: AppViewModel, onOpenSchedule: () -> Unit, onOpenExercises: ()
                     editing = editingDays[day] == true,
                     onToggleOpen = { openOverrides[day] = !isOpen(day) },
                     onToggleEditing = { editingDays[day] = editingDays[day] != true },
-                    onLog = { exercise, weight -> vm.logWeight(workout.id, exercise.id, day, weight) },
+                    onLog = { exercise, weight, outcome -> vm.logWeight(workout.id, exercise.id, day, weight, outcome) },
                     onEditExercise = { editExercise = it },
                     onMove = { exercise, delta -> vm.move(workout.id, exercise.id, delta) },
                     onRemove = { vm.removeFromWorkout(workout.id, it.id) },
@@ -208,7 +210,7 @@ private fun SessionCard(
     editing: Boolean,
     onToggleOpen: () -> Unit,
     onToggleEditing: () -> Unit,
-    onLog: (Exercise, Double) -> Unit,
+    onLog: (Exercise, Double, Outcome) -> Unit,
     onEditExercise: (Exercise) -> Unit,
     onMove: (Exercise, Int) -> Unit,
     onRemove: (Exercise) -> Unit,
@@ -252,7 +254,7 @@ private fun SessionCard(
                         editing = editing,
                         canMoveUp = index > 0,
                         canMoveDown = index < progress.lastIndex,
-                        onLog = { onLog(p.exercise, it) },
+                        onLog = { weight, outcome -> onLog(p.exercise, weight, outcome) },
                         onEdit = { onEditExercise(p.exercise) },
                         onMove = { onMove(p.exercise, it) },
                         onRemove = { onRemove(p.exercise) },
@@ -277,7 +279,7 @@ private fun ExerciseRow(
     editing: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
-    onLog: (Double) -> Unit,
+    onLog: (Double, Outcome) -> Unit,
     onEdit: () -> Unit,
     onMove: (Int) -> Unit,
     onRemove: () -> Unit,
@@ -313,7 +315,8 @@ private fun ExerciseRow(
                 val parsed = parseWeight(input)
                 val dirty = parsed != null && parsed != logged?.weight
                 FilledTonalIconButton(
-                    onClick = { parsed?.let(onLog) },
+                    // Updating the weight keeps any Missed / 10+ AMRAP mark.
+                    onClick = { parsed?.let { onLog(it, logged?.result ?: Outcome.DONE) } },
                     enabled = logged == null && parsed != null || dirty,
                 ) {
                     Icon(Icons.Filled.Check, if (logged == null) "Log" else "Update")
@@ -321,15 +324,52 @@ private fun ExerciseRow(
             }
         }
         if (!editing) {
+            val outcome = logged?.result
+            // The chips log the session too, so one tap is enough: weight from the box, else the target.
+            val weightForChip = parseWeight(input) ?: logged?.weight ?: progress.target
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = outcome == Outcome.MISSED,
+                    onClick = { onLog(weightForChip, if (outcome == Outcome.MISSED) Outcome.DONE else Outcome.MISSED) },
+                    label = { Text("Missed") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.errorContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                )
+                FilterChip(
+                    selected = outcome == Outcome.AMRAP_10,
+                    onClick = { onLog(weightForChip, if (outcome == Outcome.AMRAP_10) Outcome.DONE else Outcome.AMRAP_10) },
+                    label = { Text("10+ AMRAP") },
+                )
+            }
             val previous = progress.previous
             Text(
                 when {
-                    logged != null -> "✓ Logged ${formatWeight(logged.weight)} $unit · next time ${formatWeight(progress.nextTime!!)} $unit"
-                    previous != null -> "Last: ${formatWeight(previous.weight)} $unit (${formatDay(previous.epochDay)})"
+                    logged != null -> {
+                        val next = "next time ${formatWeight(progress.nextTime!!)} $unit"
+                        when (outcome) {
+                            Outcome.MISSED -> "✗ Missed at ${formatWeight(logged.weight)} $unit · deload: $next"
+                            Outcome.AMRAP_10 -> "✓ 10+ AMRAP at ${formatWeight(logged.weight)} $unit · double jump: $next"
+                            else -> "✓ Logged ${formatWeight(logged.weight)} $unit · $next"
+                        }
+                    }
+                    previous != null -> {
+                        val note = when (previous.result) {
+                            Outcome.MISSED -> ", missed → deload"
+                            Outcome.AMRAP_10 -> ", 10+ AMRAP → double jump"
+                            else -> ""
+                        }
+                        "Last: ${formatWeight(previous.weight)} $unit (${formatDay(previous.epochDay)}$note)"
+                    }
                     else -> "No history yet — starting weight"
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = if (logged != null) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = when {
+                    outcome == Outcome.MISSED -> MaterialTheme.colorScheme.error
+                    logged != null -> MaterialTheme.colorScheme.tertiary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
     }
